@@ -33,6 +33,9 @@ public class Router {
   private DatagramSocket socket;
   private DatagramPacket receivepacket;
 
+  public final static int MAX_PAYLOAD_SIZE = Integer.SIZE/8 * 10; // bytes (i.e Max number of nodes is 10, integer size is 4 bytes in java)
+  private LinkState cost;
+
   private String peerip;
   private int routerid;
   private int port;
@@ -51,7 +54,6 @@ public class Router {
 
 	}
 
-
     	/**
      	*  Compute route information based on Dijkstra's algorithm and print the same
      	*
@@ -60,8 +62,6 @@ public class Router {
 
     //Initialization of data structure(s)
     timer = new Timer(true);
-
-
 
     try {
 
@@ -77,15 +77,12 @@ public class Router {
       while(true) {
 
         //Receive link state message from neighbor
+        byte[] message = new byte[MAX_PAYLOAD_SIZE];
+        receivepacket = new DatagramPacket(message, message.length);
+        socket.receive(receivepacket);
 
-          //byte[] data = new byte[MAX_PAYLOAD_SIZE];
-          //receivepacket = new DatagramPacket(data, data.length);
-          //UDPsocket.receive(receivePacket);
-
-        //Update data structure(s)
-
-        //Forward link state message received to neighboring node(s) based on broadcast algorithm
-
+        // Update datastructures and forward link state messages
+        processUpDateDS(receivepacket);
       }
 
     }
@@ -112,6 +109,10 @@ public class Router {
 
   public synchronized void processUpDateDS(DatagramPacket receivepacket)
   {
+    System.out.println("Recieved Linkstate Message");
+
+    //cost =
+
       // Update data structure(s).
       // Forward link state message received to neighboring nodes
       // based on broadcast algorithm used.
@@ -122,8 +123,6 @@ public class Router {
 
       //Send node’s link state vector to neighboring nodes as link
       //state message.
-      //Schedule task if Method-1 followed to implement recurring
-      //timer task.
   }
 
   public synchronized void processUpdateRoute(){
@@ -137,9 +136,6 @@ public class Router {
     //timer task.
   }
 
-	/* A simple test driver
-
-	*/
 	public static void main(String[] args) {
 
 		String peerip = "127.0.0.1"; // all router programs running in the same machine for simplicity
