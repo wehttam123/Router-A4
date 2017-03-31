@@ -22,7 +22,7 @@ public class LinkState {
   public final static int MAX_PAYLOAD_SIZE = Integer.SIZE/8 * 10; // bytes (i.e Max number of nodes is 10, integer size is 4 bytes in java)
   public final static int MAX_SIZE = HEADER_SIZE + MAX_PAYLOAD_SIZE; // bytes
 
-	/* may consider adding more fields based on broadcast algorithm used */
+	public int count;
 
 	public int[] cost; // link state vector which contains cost to all nodes; actual cost if node is a neighbor; 999 (infinity) if node is not a neighbor
 
@@ -37,7 +37,7 @@ public class LinkState {
         * @param cost		link cost vector
 
 	 */
-	public LinkState(int sourceid, int destid, int[] cost) {
+	public LinkState(int sourceid, int destid, int[] cost, int count) {
 		this.sourceId = sourceid;
 		this.destId = destid;
 		setCost(cost);
@@ -63,7 +63,7 @@ public class LinkState {
 
 	*/
 	public LinkState(LinkState ls) {
-		this(ls.sourceId, ls.destId, ls.cost);
+		this(ls.sourceId, ls.destId, ls.cost, ls.count);
 	}
 
       	/**

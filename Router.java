@@ -32,9 +32,13 @@ public class Router {
   // Socket
   private DatagramSocket socket;
   private DatagramPacket receivepacket;
+  private DatagramPacket sendPacket;
 
   public final static int MAX_PAYLOAD_SIZE = Integer.SIZE/8 * 10; // bytes (i.e Max number of nodes is 10, integer size is 4 bytes in java)
-  private LinkState cost;
+  private int[] cost;
+  private LinkState broadcast;
+
+  private Config config;
 
   private String peerip;
   private int routerid;
@@ -62,6 +66,13 @@ public class Router {
 
     //Initialization of data structure(s)
     timer = new Timer(true);
+
+    config = new Config(configfile);
+
+    cost = new int[config.nodes];
+    for (int i = 0; i < config.nodes; i++) {
+        cost[i] = 999;
+    }
 
     try {
 
@@ -101,7 +112,7 @@ public class Router {
       //  	for(int i = 0; i < numNodes; i++)
       //    	{
       //    		System.out.println(i + "\t\t   " + distancevector[i] +  "\t\t\t" +  prev[i]);
-      //    	}
+      //     	}
 
 	 	/*******************/
 
@@ -121,8 +132,18 @@ public class Router {
   public synchronized void processUpdateNeighbor(){
     System.out.println("Update Neighbor");
 
-      //Send node’s link state vector to neighboring nodes as link
-      //state message.
+    try{
+      //Send node’s link state vector to neighboring nodes as link state message.
+      for(int i = 0; i < config.neighbors; i++){
+        broadcast = new LinkState(routerid, config.routers[i].ID, cost, config.nodes);
+        sendPacket = new DatagramPacket(broadcast.getBytes(), broadcast.getBytes().length, InetAddress.getByName(peerip), config.routers[i].port);
+        socket.send(sendPacket);
+      }
+    }
+    catch (Exception e)
+    {
+      System.out.println("Error: " + e.getMessage());
+    }
   }
 
   public synchronized void processUpdateRoute(){
@@ -164,6 +185,54 @@ public class Router {
 		System.out.printf("Router initialized..running");
 		router.compute();
 	}
+
+}
+
+class Config {
+
+  public int nodes;
+  public int neighbors;
+  public Node[] routers;
+
+  public Config (String config){
+
+    try{
+      String line;
+      BufferedReader	read = new BufferedReader(new FileReader(config));
+
+      nodes = Integer.parseInt(read.readLine());
+
+      routers = new Node[nodes];
+
+      neighbors = 0;
+
+      System.out.println("config:");
+	    while ((line = read.readLine()) != null) {
+		      String[] configinfo = line.split(" ");
+          routers[neighbors] = new Node(configinfo[0],Integer.parseInt(configinfo[1]),Integer.parseInt(configinfo[2]),Integer.parseInt(configinfo[3]));
+          neighbors++;
+          System.out.println(line);
+	    }
+      System.out.println("nodes " + nodes + "neighbors " + neighbors);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+}
+
+class Node {
+
+  public String label;
+  public int ID;
+  public int cost;
+  public int port;
+
+  public Node(String label, int ID, int cost, int port) {
+    this.label = label;
+    this.ID = ID;
+    this.cost = cost;
+    this.port = port;
+  }
 
 }
 
