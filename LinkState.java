@@ -18,11 +18,11 @@ public class LinkState {
 
 	int sourceId; // id of the node that generates the link state message in the first place (link state vector always belong to this node)
 	int destId; // id of the destination node; this changes when a node forwards the message to its neighbor
-  public final static int HEADER_SIZE = Integer.SIZE/8 * 2; // bytes (integer size is 4 bytes in java)
+  public final static int HEADER_SIZE = Integer.SIZE/8 * 3; // bytes (integer size is 4 bytes in java)
   public final static int MAX_PAYLOAD_SIZE = Integer.SIZE/8 * 10; // bytes (i.e Max number of nodes is 10, integer size is 4 bytes in java)
   public final static int MAX_SIZE = HEADER_SIZE + MAX_PAYLOAD_SIZE; // bytes
 
-	public int count;
+	public int counter;
 
 	public int[] cost; // link state vector which contains cost to all nodes; actual cost if node is a neighbor; 999 (infinity) if node is not a neighbor
 
@@ -37,10 +37,11 @@ public class LinkState {
         * @param cost		link cost vector
 
 	 */
-	public LinkState(int sourceid, int destid, int[] cost, int count) {
+	public LinkState(int sourceid, int destid, int[] cost, int num) {
 		this.sourceId = sourceid;
 		this.destId = destid;
 		setCost(cost);
+		this.counter = num;
 	}
 
 
@@ -63,7 +64,7 @@ public class LinkState {
 
 	*/
 	public LinkState(LinkState ls) {
-		this(ls.sourceId, ls.destId, ls.cost, ls.count);
+		this(ls.sourceId, ls.destId, ls.cost, ls.counter);
 	}
 
       	/**
@@ -116,10 +117,15 @@ public class LinkState {
                 bytes[3] = (byte) (sourceId >>> 24);
 
 
-		bytes[4] = (byte) (destId);
+								bytes[4] = (byte) (destId);
                 bytes[5] = (byte) (destId >>> 8);
                 bytes[6] = (byte) (destId >>> 16);
                 bytes[7] = (byte) (destId >>> 24);
+
+								bytes[8] = (byte) (counter);
+                bytes[9] = (byte) (counter >>> 8);
+                bytes[10] = (byte) (counter >>> 16);
+                bytes[11] = (byte) (counter >>> 24);
 
 	        // store payload data -- link state vector
                 int baseindex = HEADER_SIZE; // in bytes
@@ -162,16 +168,21 @@ public class LinkState {
                 int b3 = bytes[3] & 0xFF;
                 sourceId = (b3 << 24) + (b2 << 16) + (b1 << 8) + (b0);
 
-		b0 = bytes[4] & 0xFF;
+								b0 = bytes[4] & 0xFF;
                 b1 = bytes[5] & 0xFF;
                 b2 = bytes[6] & 0xFF;
                 b3 = bytes[7] & 0xFF;
                 destId = (b3 << 24) + (b2 << 16) + (b1 << 8) + (b0);
 
+								b0 = bytes[8] & 0xFF;
+                b1 = bytes[9] & 0xFF;
+                b2 = bytes[10] & 0xFF;
+                b3 = bytes[11] & 0xFF;
+                counter = (b3 << 24) + (b2 << 16) + (b1 << 8) + (b0);
 
                 // construct  payload -- link state vector
                 int baseindex = HEADER_SIZE; // in bytes
-	        int payloadsize = bytes.length - HEADER_SIZE;
+	        			int payloadsize = bytes.length - HEADER_SIZE;
                 cost = new int[payloadsize/(Integer.SIZE/8)];
 
 		if(payloadsize > MAX_PAYLOAD_SIZE)
@@ -181,13 +192,15 @@ public class LinkState {
 		for(int i = 0; i < payloadsize; i = i + 4)
 		{
 
-			b0 = bytes[baseindex + i] & 0xFF;
-                	b1 = bytes[baseindex + i + 1] & 0xFF;
+									b0 = bytes[baseindex + i] & 0xFF;
+        					b1 = bytes[baseindex + i + 1] & 0xFF;
                 	b2 = bytes[baseindex + i + 2] & 0xFF;
                 	b3 = bytes[baseindex + i + 3] & 0xFF;
                 	cost[count] = (b3 << 24) + (b2 << 16) + (b1 << 8) + (b0);
 
                 	count++;
 		}
+
+
         }
 }

@@ -2,8 +2,8 @@
  * Router Class
  *
  * Router implements Dijkstra's algorithm for computing the minumum distance to all nodes in the network
- * @author      XYZ
- * @version     1.0
+ * @author      Matthew hylton (10114326)
+ * @version     2.0
  *
  */
 
@@ -37,8 +37,13 @@ public class Router {
   public final static int MAX_PAYLOAD_SIZE = Integer.SIZE/8 * 10; // bytes (i.e Max number of nodes is 10, integer size is 4 bytes in java)
   private int[] cost;
   private LinkState broadcast;
+  private LinkState receive;
 
+  // Router Configuration
   private Config config;
+
+  // List of linkstate messages by router
+  private int[][] linkstates;
 
   private String peerip;
   private int routerid;
@@ -64,35 +69,39 @@ public class Router {
      	*/
 	public void compute() {
 
-    //Initialization of data structure(s)
+    // Initialization of data structure(s).
     timer = new Timer(true);
 
     config = new Config(configfile);
 
     cost = new int[config.nodes];
-    for (int i = 0; i < config.nodes; i++) {
-        cost[i] = 999;
+    for (int i = 0; i < config.nodes; i++) { cost[i] = 999; }
+    cost[routerid] = 0;
+    for (int i = 0; i < config.neighbors; i++) {
+      cost[config.routers[i].ID] = config.routers[i].cost;
     }
+
+    linkstates = new int[config.nodes][];
 
     try {
 
-      //Create UDP socket to send and listen link state message
+      // Create UDP socket to send and listen link state message.
       socket = new DatagramSocket(port);
 
-      //Set timer task to send node’s link state vector to neighboring nodes every 1000 ms
+      // Set timer task to send node’s link state vector to neighboring nodes every 1000 ms.
       timer.scheduleAtFixedRate(new SendLink(this), neighborupdate, neighborupdate);
 
-      //Set timer task to update node’s route information every 10000 ms
+      // Set timer task to update node’s route information every 10000 ms.
       timer.scheduleAtFixedRate(new UpdateRoute(this), routeupdate, routeupdate);
 
       while(true) {
 
-        //Receive link state message from neighbor
-        byte[] message = new byte[MAX_PAYLOAD_SIZE];
+        // Receive link state message from neighbor.
+        byte[] message = new byte[1024];
         receivepacket = new DatagramPacket(message, message.length);
         socket.receive(receivepacket);
 
-        // Update datastructures and forward link state messages
+        // Update datastructures and forward link state messages.
         processUpDateDS(receivepacket);
       }
 
@@ -106,34 +115,33 @@ public class Router {
       if (socket != null) { socket.close(); }
     }
 
-	  	/**** You may use the follwing piece of code to print routing table info *******/
-        	System.out.println("Routing Info");
-        	System.out.println("RouterID \t Distance \t Prev RouterID");
-      //  	for(int i = 0; i < numNodes; i++)
-      //    	{
-      //    		System.out.println(i + "\t\t   " + distancevector[i] +  "\t\t\t" +  prev[i]);
-      //     	}
-
-	 	/*******************/
-
 	}
 
-  public synchronized void processUpDateDS(DatagramPacket receivepacket)
-  {
-    System.out.println("Recieved Linkstate Message");
+  public synchronized void processUpDateDS(DatagramPacket receivepacket){
+      try{
+        receive = new LinkState(receivepacket);
 
-    //cost =
+        // Update data structure.
+        linkstates[receive.sourceId] = receive.cost;
 
-      // Update data structure(s).
-      // Forward link state message received to neighboring nodes
-      // based on broadcast algorithm used.
+        // Forward link state message received to neighboring nodes.
+        if(receive.counter > 0){
+          for(int i = 0; i < config.neighbors; i++){
+            receive.counter--;
+            sendPacket = new DatagramPacket(receive.getBytes(), receive.getBytes().length, InetAddress.getByName(peerip), config.routers[i].port);
+            socket.send(sendPacket);
+          }
+        }
+      }
+      catch (Exception e)
+      {
+        System.out.println("Error: " + e.getMessage());
+      }
   }
 
   public synchronized void processUpdateNeighbor(){
-    System.out.println("Update Neighbor");
-
     try{
-      //Send node’s link state vector to neighboring nodes as link state message.
+      // Send node’s link state vector to neighboring nodes as link state message.
       for(int i = 0; i < config.neighbors; i++){
         broadcast = new LinkState(routerid, config.routers[i].ID, cost, config.nodes);
         sendPacket = new DatagramPacket(broadcast.getBytes(), broadcast.getBytes().length, InetAddress.getByName(peerip), config.routers[i].port);
@@ -147,14 +155,75 @@ public class Router {
   }
 
   public synchronized void processUpdateRoute(){
-    System.out.println("Update Route");
 
-    //If link state vectors of all nodes received,
-    //Yes => Compute route info based on Dijkstra’s algorithm
-    //and print as per the output format.
-    //No => ignore the event.
-    //Schedule task if Method-1 followed to implement recurring
-    //timer task.
+    boolean allReceived = true;
+
+    int dist[] = new int[config.nodes]; // D(v)
+    int prev[] = new int[config.nodes];
+
+    // Determine if link state vectors have been received.
+    for (int i = 0; i < config.nodes; i++) {
+      if (linkstates[i] == null){ allReceived = false; }
+    }
+
+    // If link state vectors of all nodes received.
+    if (allReceived){
+
+      // Compute route info based on Dijkstra’s algorithm
+      int n[] = new int[config.nodes]; // N'
+      int min = 999;
+      int w = 0;
+
+      for (int i = 0; i < config.nodes; i++) { n[i] = -1; }
+      for (int v = 0; v < config.nodes; v++) { dist[v] = 999; }
+
+      // N' = {u}. u = routerid.
+      n[routerid] = routerid;
+
+      // For all nodes v. If v is adjacent to u, then D(v) = c(u,v), else D(v = 999).
+      for (int i = 0; i < config.neighbors; i++) {
+        dist[config.routers[i].ID] = linkstates[routerid][config.routers[i].ID];
+        prev[config.routers[i].ID] = routerid;
+      }
+      dist[routerid] = 0;
+      prev[routerid] = routerid;
+
+      // Loop until all nodes in N'.
+      for (int j = 0; j < config.nodes-1; j++) {
+        // Find node w not in N' such that D(w) is a minumum.
+        for (int i = 0; i < config.nodes; i++) {
+          if (n[i] == -1) {
+            if (dist[i] < min) {
+              min = dist[i];
+              w = i;
+            }
+          }
+        }
+
+        // Add w to N'.
+        n[w] = w;
+
+        // Update D(v) for all adjacent to w and not in N'.
+        for (int v = 0; v < config.nodes; v++) {
+          if (n[v] == -1) {
+            if (linkstates[w][v] < 999){
+              // D(v) = min( D(v), D(w) + c(w,v)).
+              if (dist[v] > dist[w]+linkstates[w][v])
+                dist[v] = dist[w]+linkstates[w][v];
+                prev[v] = w;
+            }
+          }
+        }
+      }
+
+      //and print as per the output format.
+      System.out.println("\nRouting Info");
+      System.out.println("RouterID \t Distance \t Prev RouterID");
+      for(int i = 0; i < config.nodes; i++)
+      {
+        System.out.println(i + "\t\t   " + dist[i] +  "\t\t\t" +  prev[i]);
+      }
+    }
   }
 
 	public static void main(String[] args) {
@@ -188,44 +257,45 @@ public class Router {
 
 }
 
+// Network Configuration File Parser
 class Config {
 
-  public int nodes;
-  public int neighbors;
-  public Node[] routers;
+  public int nodes; // Number of nodes in the network
+  public int neighbors; // Number of neigbors to this node
+  public Node[] routers; // List of routers on the network
 
   public Config (String config){
 
     try{
+      // Read The file
       String line;
       BufferedReader	read = new BufferedReader(new FileReader(config));
 
+      // Parse Data from file
       nodes = Integer.parseInt(read.readLine());
 
       routers = new Node[nodes];
 
       neighbors = 0;
 
-      System.out.println("config:");
 	    while ((line = read.readLine()) != null) {
 		      String[] configinfo = line.split(" ");
           routers[neighbors] = new Node(configinfo[0],Integer.parseInt(configinfo[1]),Integer.parseInt(configinfo[2]),Integer.parseInt(configinfo[3]));
           neighbors++;
-          System.out.println(line);
 	    }
-      System.out.println("nodes " + nodes + "neighbors " + neighbors);
     } catch (IOException e) {
       e.printStackTrace();
     }
   }
 }
 
+// Routers in a Configuration file
 class Node {
 
-  public String label;
-  public int ID;
-  public int cost;
-  public int port;
+  public String label; // Router name
+  public int ID; // Router id
+  public int cost; // Cost to this router
+  public int port; // Router port
 
   public Node(String label, int ID, int cost, int port) {
     this.label = label;
@@ -236,6 +306,9 @@ class Node {
 
 }
 
+// *** Timers *** //
+
+// Send linkstate message timer
 class SendLink extends TimerTask {
 
   public Router node;
@@ -249,6 +322,7 @@ class SendLink extends TimerTask {
   }
 }
 
+// Update shortest route timer
 class UpdateRoute extends TimerTask {
 
   public Router node;
