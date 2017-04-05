@@ -208,12 +208,14 @@ public class Router {
           if (n[v] == -1) {
             if (linkstates[w][v] < 999){
               // D(v) = min( D(v), D(w) + c(w,v)).
-              if (dist[v] > dist[w]+linkstates[w][v])
+              if (dist[v] > dist[w]+linkstates[w][v]) {
                 dist[v] = dist[w]+linkstates[w][v];
                 prev[v] = w;
+              }
             }
           }
         }
+        min = 999;
       }
 
       //and print as per the output format.
